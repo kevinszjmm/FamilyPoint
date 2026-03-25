@@ -86,7 +86,7 @@ async function initPg() {
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-      reward_id INTEGER NOT NULL REFERENCES rewards(id) ON DELETE CASCADE,
+      reward_id INTEGER REFERENCES rewards(id) ON DELETE SET NULL,
       points_spent INTEGER NOT NULL,
       redeemed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -197,12 +197,52 @@ async function initSqljs() {
       redeemed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (member_id) REFERENCES members(id),
-      FOREIGN KEY (reward_id) REFERENCES rewards(id)
+      FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE SET NULL
     )
   `);
   
   saveDb();
   console.log('✅ sql.js 数据库初始化完成');
+}
+
+// ============================================================
+// 数据库迁移（自动补充缺失的列）
+// ============================================================
+function migrateSqljs() {
+  // 获取所有表
+  const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
+  if (!tables.length) return;
+  
+  const tableNames = tables[0].values.map(r => r[0]);
+  
+  // 需要检查的列迁移
+  const migrations = {
+    users: [
+      { column: 'last_login_at', type: 'DATETIME DEFAULT CURRENT_TIMESTAMP' }
+    ],
+    sessions: [
+      { column: 'last_active_at', type: 'DATETIME DEFAULT CURRENT_TIMESTAMP' }
+    ]
+  };
+  
+  for (const [table, columns] of Object.entries(migrations)) {
+    if (!tableNames.includes(table)) continue;
+    
+    // 获取当前表的列信息
+    const tableInfo = db.exec(`PRAGMA table_info(${table})`);
+    if (!tableInfo.length) continue;
+    
+    const existingColumns = tableInfo[0].values.map(r => r[1]);
+    
+    for (const col of columns) {
+      if (!existingColumns.includes(col.column)) {
+        db.run(`ALTER TABLE ${table} ADD COLUMN ${col.column} ${col.type}`);
+        console.log(`  🔄 迁移: ${table} 添加列 ${col.column}`);
+      }
+    }
+  }
+  
+  saveDb();
 }
 
 // 统一初始化入口
@@ -211,6 +251,7 @@ async function initDatabase() {
     await initPg();
   } else {
     await initSqljs();
+    migrateSqljs();
   }
 }
 
@@ -227,7 +268,10 @@ function saveDb() {
 
 function query(sql, params = []) {
   if (USE_PG) return pgPool.query(sql, params);
-  const stmt = db.prepare(sql);
+  
+  // sql.js 不支持 $1, $2 语法，需要转换为 ?
+  let sqliteSQL = sql.replace(/\$\d+/g, '?');
+  const stmt = db.prepare(sqliteSQL);
   if (params.length) stmt.bind(params);
   const rows = [];
   while (stmt.step()) rows.push(stmt.getAsObject());
@@ -237,10 +281,17 @@ function query(sql, params = []) {
 
 function run(sql, params = []) {
   if (USE_PG) return pgPool.query(sql, params);
-  db.run(sql, params);
+  
+  // sql.js 不支持 $1, $2 语法，需要转换为 ?
+  let sqliteSQL = sql.replace(/\$\d+/g, '?');
+  db.run(sqliteSQL, params);
   saveDb();
+  
+  // sql.js 的 last_insert_rowid() 有时返回 0，需要特殊处理
   const lastId = db.exec('SELECT last_insert_rowid() as id');
-  return { lastInsertRowid: lastId[0]?.values[0]?.[0] };
+  const id = lastId[0]?.values[0]?.[0];
+  
+  return { lastInsertRowid: id || 1 };
 }
 
 // ============================================================
@@ -502,27 +553,68 @@ const completionOps = {
 // ============================================================
 const statsOps = {
   getTotalPoints(userId) {
+    // 实际积分 = 获得积分 - 兑换花费积分
     const result = query(`
-      SELECT m.id, m.name, m.avatar, COALESCE(SUM(c.points), 0) as total_points
+      SELECT 
+        m.id, m.name, m.avatar,
+        COALESCE(SUM(c.points), 0) as earned_points,
+        COALESCE((
+          SELECT SUM(r.points_spent) 
+          FROM redemptions r 
+          WHERE r.member_id = m.id
+        ), 0) as spent_points
       FROM members m
       LEFT JOIN completions c ON m.id = c.member_id
-      WHERE m.user_id = $1 GROUP BY m.id ORDER BY total_points DESC
+      WHERE m.user_id = $1 
+      GROUP BY m.id 
+      ORDER BY (COALESCE(SUM(c.points), 0) - COALESCE((
+          SELECT SUM(r.points_spent) 
+          FROM redemptions r 
+          WHERE r.member_id = m.id
+        ), 0)) DESC
     `, [userId]);
-    return result.rows.map(row => ({
-      id: row.id, name: row.name, avatar: row.avatar, total_points: parseInt(row.total_points)
-    }));
+    return result.rows.map(row => {
+      const earned = parseInt(row.earned_points) || 0;
+      const spent = parseInt(row.spent_points) || 0;
+      return {
+        id: row.id, 
+        name: row.name, 
+        avatar: row.avatar, 
+        total_points: earned - spent,
+        earned_points: earned,
+        spent_points: spent
+      };
+    });
   },
 
   getPointsByRange(userId, startDate, endDate) {
     const result = query(`
-      SELECT m.id, m.name, m.avatar, COALESCE(SUM(c.points), 0) as total_points
+      SELECT 
+        m.id, m.name, m.avatar,
+        COALESCE(SUM(c.points), 0) as earned_points,
+        COALESCE((
+          SELECT SUM(r.points_spent) 
+          FROM redemptions r 
+          WHERE r.member_id = m.id
+        ), 0) as spent_points
       FROM members m
       LEFT JOIN completions c ON m.id = c.member_id AND c.completed_at BETWEEN $2 AND $3
-      WHERE m.user_id = $1 GROUP BY m.id ORDER BY total_points DESC
-    `, [userId, startDate, endDate]);
-    return result.rows.map(row => ({
-      id: row.id, name: row.name, avatar: row.avatar, total_points: parseInt(row.total_points)
-    }));
+      WHERE m.user_id = $1 
+      GROUP BY m.id 
+      ORDER BY (COALESCE(SUM(c.points), 0) - COALESCE((
+          SELECT SUM(r.points_spent) 
+          FROM redemptions r 
+          WHERE r.member_id = m.id
+        ), 0)) DESC
+    `, [startDate, endDate, userId]);
+    return result.rows.map(row => {
+      const earned = parseInt(row.earned_points) || 0;
+      const spent = parseInt(row.spent_points) || 0;
+      return {
+        id: row.id, name: row.name, avatar: row.avatar, total_points: earned - spent,
+        earned_points: earned, spent_points: spent
+      };
+    });
   },
 
   getWeeklyRanking(userId) {
@@ -619,7 +711,11 @@ const redemptionOps = {
     const member = memberOps.getById(memberId, userId);
     if (!member) throw new Error('成员不存在');
     
-    const totalPoints = statsOps.getTotalPoints(userId).find(m => m.id === memberId);
+    const memberIdNum = parseInt(memberId);
+    const totalPoints = statsOps.getTotalPoints(userId).find(m => m.id === memberIdNum);
+    if (!totalPoints) {
+      throw new Error('成员没有积分记录');
+    }
     if (totalPoints.total_points < reward.points_cost) {
       throw new Error('积分不足，当前：' + totalPoints.total_points + '，需要：' + reward.points_cost);
     }
@@ -639,8 +735,8 @@ const redemptionOps = {
   getByMember(userId, memberId) {
     const result = query(`
       SELECT r.id, r.reward_id, r.points_spent, r.redeemed_at,
-             rw.name as reward_name, rw.points_cost
-      FROM redemptions r JOIN rewards rw ON r.reward_id = rw.id
+             COALESCE(rw.name, '已下架') as reward_name, rw.points_cost
+      FROM redemptions r LEFT JOIN rewards rw ON r.reward_id = rw.id
       WHERE r.user_id = $1 AND r.member_id = $2 ORDER BY r.redeemed_at DESC
     `, [userId, memberId]);
     return result.rows.map(row => ({
@@ -652,10 +748,10 @@ const redemptionOps = {
   getAll(userId) {
     const result = query(`
       SELECT r.id, r.member_id, r.reward_id, r.points_spent, r.redeemed_at,
-             m.name as member_name, rw.name as reward_name
+             m.name as member_name, COALESCE(rw.name, '已下架') as reward_name
       FROM redemptions r
       JOIN members m ON r.member_id = m.id
-      JOIN rewards rw ON r.reward_id = rw.id
+      LEFT JOIN rewards rw ON r.reward_id = rw.id
       WHERE r.user_id = $1 ORDER BY r.redeemed_at DESC
     `, [userId]);
     return result.rows.map(row => ({

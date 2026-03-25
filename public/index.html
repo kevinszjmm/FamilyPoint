@@ -238,7 +238,11 @@
         <div class="form-group"><input type="number" id="new-reward-stock" placeholder="库存（-1表示无限）" value="-1"></div>
         <button class="btn btn-small" onclick="addReward()">➕ 添加奖励</button>
         <hr>
+        <div class="section-title">🎯 可兑换奖励</div>
         <div id="rewards-list" class="card-grid"></div>
+        <hr>
+        <div class="section-title">📜 兑换历史</div>
+        <div id="redemptions-list"></div>
       </div>
       
       <!-- 历史记录 -->
@@ -447,7 +451,10 @@
         <div class="ranking-item ${i === 0 ? 'first' : ''}">
           <div class="rank-number">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div>
           <div class="avatar" style="margin-right:12px;">${m.avatar || m.name[0]}</div>
-          <div class="member-info"><div class="member-name">${m.name}</div></div>
+          <div class="member-info">
+            <div class="member-name">${m.name}</div>
+            ${m.spent_points > 0 ? `<div style="font-size:11px;color:#888;">已兑换 ${m.spent_points}分</div>` : ''}
+          </div>
           <div class="member-points">${m.total_points}分</div>
         </div>`).join('');
     }
@@ -502,47 +509,100 @@
     }
     
     async function loadRewards() {
-      const rewards = await authFetch(API.rewards).then(r => r?.json()) || [];
-      const list = document.getElementById('rewards-list');
-      
-      if (rewards.length > 0) {
-        list.innerHTML = rewards.map(r => {
-          const stockText = r.stock === -1 ? '∞' : `剩余 ${r.stock}`;
-          const disabled = r.stock === 0 ? 'opacity:0.5;pointer-events:none;' : '';
-          return `
-          <div class="reward-card" style="${disabled}">
-            <div class="card-title">${r.name}</div>
-            <div class="card-points">${r.points_cost} 积分</div>
-            <div class="reward-stock">${stockText}</div>
-            <button class="delete-btn" style="margin-top:8px;background:rgba(255,255,255,0.3);" onclick="openRedeemModal(${r.id}, '${r.name}', ${r.points_cost}, ${r.stock})">兑换</button>
-            <button class="delete-btn" style="margin-top:5px;" onclick="deleteReward(${r.id})">删除</button>
-          </div>`;
-        }).join('');
-      } else {
-        list.innerHTML = '<div class="empty-state" style="grid-column:span 2;"><div class="empty-state-icon">🎁</div>添加积分奖励</div>';
+      try {
+        const res = await authFetch(API.rewards);
+        if (!res) {
+          console.error('❌ loadRewards: authFetch 返回 null');
+          return;
+        }
+        
+        const rewards = await res.json();
+        console.log('✅ 加载奖励:', rewards);
+        
+        const list = document.getElementById('rewards-list');
+        
+        if (rewards.length > 0) {
+          list.innerHTML = rewards.map(r => {
+            const stockText = r.stock === -1 ? '∞' : `剩余 ${r.stock}`;
+            const disabled = r.stock === 0 ? 'opacity:0.5;pointer-events:none;' : '';
+            return `
+            <div class="reward-card" style="${disabled}">
+              <div class="card-title">${r.name}</div>
+              <div class="card-points">${r.points_cost} 积分</div>
+              <div class="reward-stock">${stockText}</div>
+              <button class="delete-btn" style="margin-top:8px;background:rgba(255,255,255,0.3);" onclick="openRedeemModal(${r.id}, '${r.name}', ${r.points_cost}, ${r.stock})">兑换</button>
+              <button class="delete-btn" style="margin-top:5px;" onclick="deleteReward(${r.id})">删除</button>
+            </div>`;
+          }).join('');
+        } else {
+          list.innerHTML = '<div class="empty-state" style="grid-column:span 2;"><div class="empty-state-icon">🎁</div>添加积分奖励</div>';
+        }
+        
+        // 同时加载兑换历史
+        await loadRedemptions();
+      } catch (e) {
+        console.error('❌ loadRewards 错误:', e);
       }
     }
     
     async function loadTodayCompletions() {
       const date = document.getElementById('completion-date').value;
       const completions = await authFetch(`${API.completions}?date=${date}`).then(r => r?.json()) || [];
+      const members = await authFetch(API.members).then(r => r?.json()) || [];
       
       const list = document.getElementById('today-completions');
-      if (completions.length > 0) {
-        list.innerHTML = completions.map(c => `
-          <div class="completion-item">
-            <div class="completion-info">
-              <span><strong>${c.member_name}</strong> · ${c.task_name}</span>
-              ${c.note ? `<span style="color:#888;">${c.note}</span>` : ''}
-            </div>
-            <div style="display:flex;align-items:center;gap:10px;">
-              <span class="completion-points">+${c.points}</span>
-              <button class="delete-btn" onclick="deleteCompletion(${c.id})">✕</button>
-            </div>
-          </div>`).join('');
-      } else {
+      
+      if (completions.length === 0) {
         list.innerHTML = '<div class="empty-state">暂无记录</div>';
+        return;
       }
+      
+      // 按成员分组
+      const grouped = {};
+      completions.forEach(c => {
+        if (!grouped[c.member_id]) {
+          grouped[c.member_id] = { name: c.member_name, avatar: members.find(m => m.id === c.member_id)?.avatar || c.member_name[0], items: [] };
+        }
+        grouped[c.member_id].items.push(c);
+      });
+      
+      list.innerHTML = Object.entries(grouped).map(([memberId, member]) => `
+        <div class="member-group">
+          <div class="member-group-header">
+            <div class="avatar">${member.avatar}</div>
+            <div class="member-group-name">${member.name}</div>
+            <div class="member-group-points">+${member.items.reduce((sum, c) => sum + c.points, 0)}分</div>
+          </div>
+          <div class="member-group-body">
+            ${member.items.map(c => `
+              <div class="task-summary">
+                <span>${c.task_name} ${c.note ? `<span style="color:#888;">(${c.note})</span>` : ''}</span>
+                <span style="display:flex;align-items:center;gap:8px;">
+                  +${c.points}分
+                  <button class="delete-btn" style="padding:2px 6px;font-size:11px;" onclick="deleteCompletion(${c.id})">✕</button>
+                </span>
+              </div>`).join('')}
+          </div>
+        </div>`).join('');
+    }
+    
+    async function loadRedemptions() {
+      const redemptions = await authFetch(API.redemptions).then(r => r?.json()) || [];
+      const list = document.getElementById('redemptions-list');
+      
+      if (redemptions.length === 0) {
+        list.innerHTML = '<div class="empty-state">暂无兑换记录</div>';
+        return;
+      }
+      
+      list.innerHTML = redemptions.map(r => `
+        <div class="completion-item">
+          <div class="completion-info">
+            <span><strong>${r.member_name}</strong> 兑换了 <strong>${r.reward_name}</strong></span>
+            <span style="color:#888;font-size:12px;">${r.redeemed_at}</span>
+          </div>
+          <span class="completion-points" style="color:#ff6b6b;">-${r.points_spent}分</span>
+        </div>`).join('');
     }
     
     async function addMember() {
@@ -637,10 +697,36 @@
       const pointsCost = parseInt(document.getElementById('new-reward-points').value) || 100;
       const stock = parseInt(document.getElementById('new-reward-stock').value) ?? -1;
       if (!name) return toast('请输入奖励名称');
-      await authFetch(API.rewards, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, pointsCost, stock }) });
-      document.getElementById('new-reward-name').value = '';
-      await loadRewards();
-      toast('添加成功');
+      
+      try {
+        const res = await authFetch(API.rewards, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ name, pointsCost, stock }) 
+        });
+        
+        if (!res) {
+          console.error('❌ authFetch 返回 null，可能是 401');
+          return toast('登录已过期，请重新登录');
+        }
+        
+        const data = await res.json();
+        console.log('✅ 添加奖励响应:', data);
+        
+        if (!data.success) {
+          return toast(data.error || '添加失败');
+        }
+        
+        document.getElementById('new-reward-name').value = '';
+        document.getElementById('new-reward-points').value = '100';
+        document.getElementById('new-reward-stock').value = '-1';
+        
+        await loadRewards();
+        toast('添加成功');
+      } catch (e) {
+        console.error('❌ addReward 错误:', e);
+        toast('添加失败：' + e.message);
+      }
     }
     
     async function deleteReward(id) {
@@ -654,9 +740,18 @@
       document.getElementById('redeem-reward-name').textContent = name;
       document.getElementById('redeem-points').textContent = points + ' 积分';
       document.getElementById('redeem-modal').style.display = 'flex';
-      if (currentMembers.length > 0) {
-        document.getElementById('redeem-member').innerHTML = currentMembers.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-      }
+      
+      // 加载成员积分
+      authFetch(API.stats.total).then(r => r?.json()).then(pointsData => {
+        if (!pointsData || currentMembers.length === 0) return;
+        document.getElementById('redeem-member').innerHTML = currentMembers.map(m => {
+          const memberPoints = pointsData.find(p => p.id === m.id);
+          const pointText = memberPoints ? `${memberPoints.total_points}分可用` : '--';
+          const enough = memberPoints && memberPoints.total_points >= points;
+          const disabled = enough ? '' : 'disabled title="积分不足"';
+          return `<option value="${m.id}" ${disabled}>${m.avatar || m.name[0]} ${m.name}（${pointText}）</option>`;
+        }).join('');
+      });
     }
     
     function closeRedeemModal() {
