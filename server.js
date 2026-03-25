@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { initDatabase, userOps, memberOps, taskOps, completionOps, statsOps } = require('./database');
+const { initDatabase, userOps, memberOps, taskOps, completionOps, statsOps, rewardOps, redemptionOps } = require('./database');
 
 const app = express();
 const PORT = 3000;
@@ -177,6 +177,67 @@ app.get('/api/stats/last-week', auth, (req, res) => {
 app.get('/api/stats/member/:id/daily', auth, (req, res) => {
   const days = parseInt(req.query.days) || 30;
   res.json(statsOps.getMemberDailyStats(req.user.id, req.params.id, days));
+});
+
+// ========== 积分兑换 API ==========
+
+app.get('/api/rewards', auth, (req, res) => {
+  res.json(rewardOps.getAll(req.user.id));
+});
+
+app.post('/api/rewards', auth, (req, res) => {
+  try {
+    const { name, pointsCost, description, stock } = req.body;
+    if (!name || !pointsCost) {
+      return res.status(400).json({ error: '名称和积分不能为空' });
+    }
+    const result = rewardOps.add(req.user.id, name, pointsCost, description || '', stock ?? -1);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.put('/api/rewards/:id', auth, (req, res) => {
+  try {
+    const { name, pointsCost, description, stock } = req.body;
+    rewardOps.update(req.params.id, req.user.id, name, pointsCost, description, stock ?? -1);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete('/api/rewards/:id', auth, (req, res) => {
+  try {
+    rewardOps.delete(req.params.id, req.user.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// 兑换
+app.post('/api/redemptions', auth, (req, res) => {
+  try {
+    const { memberId, rewardId } = req.body;
+    if (!memberId || !rewardId) {
+      return res.status(400).json({ error: '请选择成员和奖励' });
+    }
+    const result = redemptionOps.redeem(req.user.id, memberId, rewardId);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get('/api/redemptions', auth, (req, res) => {
+  const { memberId } = req.query;
+  if (memberId) {
+    res.json(redemptionOps.getByMember(req.user.id, memberId));
+  } else {
+    res.json(redemptionOps.getAll(req.user.id));
+  }
 });
 
 // 主页

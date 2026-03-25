@@ -89,6 +89,35 @@ async function initDatabase() {
     )
   `);
 
+  // 积分兑换物品表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS rewards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      points_cost INTEGER NOT NULL,
+      description TEXT,
+      stock INTEGER DEFAULT -1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
+  // 兑换记录表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS redemptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      member_id INTEGER NOT NULL,
+      reward_id INTEGER NOT NULL,
+      points_spent INTEGER NOT NULL,
+      redeemed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (member_id) REFERENCES members(id),
+      FOREIGN KEY (reward_id) REFERENCES rewards(id)
+    )
+  `);
+
   saveDb();
   console.log('✅ 数据库初始化完成');
 }
@@ -427,11 +456,127 @@ const statsOps = {
   }
 };
 
+// 积分兑换操作
+const rewardOps = {
+  add(userId, name, pointsCost, description = '', stock = -1) {
+    db.run(
+      'INSERT INTO rewards (user_id, name, points_cost, description, stock) VALUES (?, ?, ?, ?, ?)',
+      [userId, name, pointsCost, description, stock]
+    );
+    saveDb();
+    const result = db.exec('SELECT last_insert_rowid() as id');
+    return { lastInsertRowid: result[0].values[0][0] };
+  },
+
+  getAll(userId) {
+    const result = db.exec(
+      'SELECT * FROM rewards WHERE user_id = ? ORDER BY points_cost',
+      [userId]
+    );
+    if (!result.length) return [];
+    return result[0].values.map(row => ({
+      id: row[0], user_id: row[1], name: row[2], points_cost: row[3],
+      description: row[4], stock: row[5], created_at: row[6]
+    }));
+  },
+
+  update(id, userId, name, pointsCost, description, stock) {
+    db.run(
+      'UPDATE rewards SET name = ?, points_cost = ?, description = ?, stock = ? WHERE id = ? AND user_id = ?',
+      [name, pointsCost, description, stock, id, userId]
+    );
+    saveDb();
+  },
+
+  delete(id, userId) {
+    db.run('DELETE FROM rewards WHERE id = ? AND user_id = ?', [id, userId]);
+    saveDb();
+  },
+
+  getById(id, userId) {
+    const result = db.exec(
+      'SELECT * FROM rewards WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    if (!result.length || !result[0].values.length) return null;
+    const row = result[0].values[0];
+    return {
+      id: row[0], user_id: row[1], name: row[2], points_cost: row[3],
+      description: row[4], stock: row[5], created_at: row[6]
+    };
+  }
+};
+
+// 兑换记录操作
+const redemptionOps = {
+  redeem(userId, memberId, rewardId) {
+    const reward = rewardOps.getById(rewardId, userId);
+    if (!reward) throw new Error('奖励不存在');
+    if (reward.stock === 0) throw new Error('库存不足');
+    
+    const member = memberOps.getById(memberId, userId);
+    if (!member) throw new Error('成员不存在');
+    
+    const totalPoints = statsOps.getTotalPoints(userId).find(m => m.id === memberId);
+    if (totalPoints.total_points < reward.points_cost) {
+      throw new Error('积分不足');
+    }
+    
+    db.run(`
+      INSERT INTO redemptions (user_id, member_id, reward_id, points_spent)
+      VALUES (?, ?, ?, ?)
+    `, [userId, memberId, rewardId, reward.points_cost]);
+    
+    if (reward.stock > 0) {
+      db.run('UPDATE rewards SET stock = stock - 1 WHERE id = ?', [rewardId]);
+    }
+    saveDb();
+    
+    const result = db.exec('SELECT last_insert_rowid() as id');
+    return { lastInsertRowid: result[0].values[0][0] };
+  },
+
+  getByMember(userId, memberId) {
+    const result = db.exec(`
+      SELECT r.id, r.reward_id, r.points_spent, r.redeemed_at,
+             rw.name as reward_name, rw.points_cost
+      FROM redemptions r
+      JOIN rewards rw ON r.reward_id = rw.id
+      WHERE r.user_id = ? AND r.member_id = ?
+      ORDER BY r.redeemed_at DESC
+    `, [userId, memberId]);
+    if (!result.length) return [];
+    return result[0].values.map(row => ({
+      id: row[0], reward_id: row[1], points_spent: row[2],
+      redeemed_at: row[3], reward_name: row[4], points_cost: row[5]
+    }));
+  },
+
+  getAll(userId) {
+    const result = db.exec(`
+      SELECT r.id, r.member_id, r.reward_id, r.points_spent, r.redeemed_at,
+             m.name as member_name, rw.name as reward_name
+      FROM redemptions r
+      JOIN members m ON r.member_id = m.id
+      JOIN rewards rw ON r.reward_id = rw.id
+      WHERE r.user_id = ?
+      ORDER BY r.redeemed_at DESC
+    `, [userId]);
+    if (!result.length) return [];
+    return result[0].values.map(row => ({
+      id: row[0], member_id: row[1], reward_id: row[2], points_spent: row[3],
+      redeemed_at: row[4], member_name: row[5], reward_name: row[6]
+    }));
+  }
+};
+
 module.exports = {
   initDatabase,
   userOps,
   memberOps,
   taskOps,
   completionOps,
-  statsOps
+  statsOps,
+  rewardOps,
+  redemptionOps
 };
