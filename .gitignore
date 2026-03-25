@@ -1,0 +1,4 @@
+node_modules/
+family-points.db
+.DS_Store
+*.log

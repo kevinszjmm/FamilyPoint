@@ -1,0 +1,16 @@
+{
+  "name": "family-points",
+  "version": "1.0.0",
+  "description": "家庭积分系统",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "sql.js": "^1.10.3",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

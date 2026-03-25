@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>🏠 家庭积分</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 10px;
+    }
+    
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    
+    /* 登录页面 */
+    .auth-page {
+      background: white;
+      border-radius: 20px;
+      padding: 30px 20px;
+      margin-top: 50px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    
+    .auth-title {
+      text-align: center;
+      font-size: 1.8em;
+      margin-bottom: 30px;
+      color: #333;
+    }
+    
+    .auth-title span {
+      font-size: 2em;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #555;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 14px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+    
+    .form-group input:focus {
+      border-color: #667eea;
+      outline: none;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    .btn:active {
+      transform: scale(0.98);
+    }
+    
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #666;
+      margin-top: 10px;
+    }
+    
+    .auth-switch {
+      text-align: center;
+      margin-top: 20px;
+      color: #888;
+    }
+    
+    .auth-switch a {
+      color: #667eea;
+      text-decoration: none;
+    }
+    
+    /* 主应用 */
+    .app-page {
+      display: none;
+    }
+    
+    .header {
+      color: white;
+      text-align: center;
+      padding: 15px 0;
+      margin-bottom: 15px;
+    }
+    
+    .header h1 {
+      font-size: 1.5em;
+    }
+    
+    .header .family-name {
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+      overflow-x: auto;
+      padding-bottom: 5px;
+    }
+    
+    .tab {
+      flex-shrink: 0;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.2);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .tab.active {
+      background: white;
+      color: #667eea;
+    }
+    
+    .panel {
+      display: none;
+      background: white;
+      border-radius: 16px;
+      padding: 20px 15px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      margin-bottom: 15px;
+    }
+    
+    .panel.active {
+      display: block;
+    }
+    
+    .section-title {
+      font-size: 1.2em;
+      margin-bottom: 15px;
+      color: #333;
+    }
+    
+    /* 排行榜 */
+    .champion {
+      text-align: center;
+      padding: 20px;
+      background: linear-gradient(135deg, #ffd700 0%, #ffec8b 100%);
+      border-radius: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .champion-title {
+      font-size: 1em;
+      margin-bottom: 5px;
+    }
+    
+    .champion-name {
+      font-size: 2em;
+      font-weight: bold;
+      color: #333;
+    }
+    
+    .champion-points {
+      font-size: 1em;
+      color: #666;
+    }
+    
+    .ranking-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .ranking-item {
+      display: flex;
+      align-items: center;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 12px;
+    }
+    
+    .ranking-item.first {
+      background: linear-gradient(135deg, #ffd700 0%, #ffec8b 100%);
+    }
+    
+    .rank-number {
+      font-size: 1.5em;
+      width: 40px;
+      text-align: center;
+    }
+    
+    .member-avatar {
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      background: #667eea;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5em;
+      margin-right: 12px;
+    }
+    
+    .member-info {
+      flex: 1;
+    }
+    
+    .member-name {
+      font-weight: bold;
+    }
+    
+    .member-points {
+      font-size: 1.3em;
+      color: #667eea;
+      font-weight: bold;
+    }
+    
+    /* 卡片网格 */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .card {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 15px;
+      text-align: center;
+    }
+    
+    .card-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    
+    .card-points {
+      font-size: 1.5em;
+      color: #667eea;
+      font-weight: bold;
+    }
+    
+    .card-category {
+      font-size: 0.8em;
+      color: #888;
+    }
+    
+    /* 完成记录 */
+    .completion-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .completion-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    
+    .completion-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    
+    .completion-points {
+      font-weight: bold;
+      color: #667eea;
+    }
+    
+    .delete-btn {
+      padding: 5px 10px;
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    
+    /* 日期选择 */
+    .date-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .date-row input {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    
+    /* 表单按钮 */
+    .btn-small {
+      width: auto;
+      padding: 10px 20px;
+      display: inline-block;
+    }
+    
+    .btn-danger {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+    }
+    
+    /* 空状态 */
+    .empty-state {
+      text-align: center;
+      padding: 30px;
+      color: #888;
+    }
+    
+    .empty-state-icon {
+      font-size: 3em;
+      margin-bottom: 10px;
+    }
+    
+    /* 退出按钮 */
+    .logout-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 50px;
+      height: 50px;
+      background: rgba(255,255,255,0.9);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5em;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+      cursor: pointer;
+      z-index: 100;
+    }
+    
+    hr {
+      margin: 20px 0;
+      border: none;
+      border-top: 1px solid #eee;
+    }
+    
+    /* Toast 提示 */
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 10px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .toast.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 登录/注册页面 -->
+    <div id="auth-page" class="auth-page">
+      <div class="auth-title"><span>🏠</span><br>家庭积分系统</div>
+      
+      <div id="login-form">
+        <div class="form-group">
+          <label>用户名</label>
+          <input type="text" id="login-username" placeholder="输入用户名">
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input type="password" id="login-password" placeholder="输入密码">
+        </div>
+        <button class="btn" onclick="login()">登录</button>
+        <button class="btn btn-secondary" onclick="showRegister()">没有账号？去注册</button>
+      </div>
+      
+      <div id="register-form" style="display: none;">
+        <div class="form-group">
+          <label>用户名</label>
+          <input type="text" id="reg-username" placeholder="设置用户名">
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input type="password" id="reg-password" placeholder="设置密码">
+        </div>
+        <div class="form-group">
+          <label>家庭名称（可选）</label>
+          <input type="text" id="reg-family" placeholder="例如：幸福之家">
+        </div>
+        <button class="btn" onclick="register()">注册</button>
+        <button class="btn btn-secondary" onclick="showLogin()">已有账号？去登录</button>
+      </div>
+    </div>
+    
+    <!-- 主应用 -->
+    <div id="app-page" class="app-page">
+      <div class="header">
+        <h1>🏠 家庭积分</h1>
+        <div class="family-name" id="family-name"></div>
+      </div>
+      
+      <div class="tabs">
+        <button class="tab active" onclick="showPanel('ranking')">📊 排行</button>
+        <button class="tab" onclick="showPanel('record')">✅ 记录</button>
+        <button class="tab" onclick="showPanel('members')">👤 成员</button>
+        <button class="tab" onclick="showPanel('tasks')">📋 任务</button>
+        <button class="tab" onclick="showPanel('history')">📜 历史</button>
+      </div>
+      
+      <!-- 排行榜 -->
+      <div id="ranking-panel" class="panel active">
+        <div class="section-title">🏆 本周排行</div>
+        <div id="champion"></div>
+        <div id="weekly-ranking" class="ranking-list"></div>
+        <hr>
+        <div class="section-title">📈 总排行</div>
+        <div id="total-ranking" class="ranking-list"></div>
+      </div>
+      
+      <!-- 记录完成 -->
+      <div id="record-panel" class="panel">
+        <div class="section-title">✅ 记录完成</div>
+        <div class="date-row">
+          <label>日期：</label>
+          <input type="date" id="completion-date">
+        </div>
+        <div class="form-group">
+          <label>成员</label>
+          <select id="select-member" style="width:100%;padding:12px;border-radius:10px;border:2px solid #e0e0e0;"></select>
+        </div>
+        <div class="form-group">
+          <label>任务</label>
+          <select id="select-task" style="width:100%;padding:12px;border-radius:10px;border:2px solid #e0e0e0;"></select>
+        </div>
+        <div class="form-group">
+          <label>备注</label>
+          <input type="text" id="completion-note" placeholder="可选">
+        </div>
+        <button class="btn btn-small" onclick="addCompletion()">✅ 记录</button>
+        <hr>
+        <div class="section-title">📝 今日记录</div>
+        <div id="today-completions" class="completion-list"></div>
+      </div>
+      
+      <!-- 成员管理 -->
+      <div id="members-panel" class="panel">
+        <div class="section-title">👤 家庭成员</div>
+        <div class="form-group">
+          <input type="text" id="new-member-name" placeholder="成员名称">
+        </div>
+        <button class="btn btn-small" onclick="addMember()">➕ 添加</button>
+        <hr>
+        <div id="members-list" class="card-grid"></div>
+      </div>
+      
+      <!-- 任务管理 -->
+      <div id="tasks-panel" class="panel">
+        <div class="section-title">📋 积分任务</div>
+        <div class="form-group">
+          <input type="text" id="new-task-name" placeholder="任务名称">
+        </div>
+        <div class="form-group">
+          <input type="number" id="new-task-points" placeholder="积分" value="10">
+        </div>
+        <div class="form-group">
+          <select id="new-task-category" style="width:100%;padding:12px;border-radius:10px;border:2px solid #e0e0e0;">
+            <option value="日常">日常</option>
+            <option value="家务">家务</option>
+            <option value="学习">学习</option>
+            <option value="运动">运动</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+        <button class="btn btn-small" onclick="addTask()">➕ 添加</button>
+        <hr>
+        <div id="tasks-list" class="card-grid"></div>
+      </div>
+      
+      <!-- 历史记录 -->
+      <div id="history-panel" class="panel">
+        <div class="section-title">📜 历史记录</div>
+        <div class="date-row">
+          <input type="date" id="history-start">
+          <span>至</span>
+          <input type="date" id="history-end">
+        </div>
+        <button class="btn btn-small" onclick="loadHistory()">查询</button>
+        <hr>
+        <div id="history-list" class="completion-list"></div>
+      </div>
+      
+      <div class="logout-btn" onclick="logout()">🚪</div>
+    </div>
+  </div>
+  
+  <div class="toast" id="toast"></div>
+  
+  <script>
+    let token = localStorage.getItem('token');
+    
+    const API = {
+      register: '/api/register',
+      login: '/api/login',
+      logout: '/api/logout',
+      me: '/api/me',
+      members: '/api/members',
+      tasks: '/api/tasks',
+      completions: '/api/completions',
+      stats: { total: '/api/stats/total', weekly: '/api/stats/weekly' }
+    };
+    
+    // Toast 提示
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2000);
+    }
+    
+    // 带认证的 fetch
+    async function authFetch(url, options = {}) {
+      options.headers = options.headers || {};
+      options.headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(url, options);
+      if (res.status === 401) {
+        logout();
+        return null;
+      }
+      return res;
+    }
+    
+    // 初始化
+    document.addEventListener('DOMContentLoaded', async () => {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('completion-date').value = today;
+      document.getElementById('history-start').value = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      document.getElementById('history-end').value = today;
+      
+      if (token) {
+        const res = await authFetch(API.me);
+        if (res) {
+          const user = await res.json();
+          if (user.id) {
+            showApp(user);
+            return;
+          }
+        }
+      }
+      showAuth();
+    });
+    
+    function showAuth() {
+      document.getElementById('auth-page').style.display = 'block';
+      document.getElementById('app-page').style.display = 'none';
+    }
+    
+    function showApp(user) {
+      document.getElementById('auth-page').style.display = 'none';
+      document.getElementById('app-page').style.display = 'block';
+      document.getElementById('family-name').textContent = user.familyName || user.username;
+      loadAll();
+    }
+    
+    function showLogin() {
+      document.getElementById('login-form').style.display = 'block';
+      document.getElementById('register-form').style.display = 'none';
+    }
+    
+    function showRegister() {
+      document.getElementById('login-form').style.display = 'none';
+      document.getElementById('register-form').style.display = 'block';
+    }
+    
+    async function login() {
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      
+      if (!username || !password) return toast('请输入用户名和密码');
+      
+      const res = await fetch(API.login, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        token = data.token;
+        localStorage.setItem('token', token);
+        showApp(data.user);
+        toast('登录成功');
+      } else {
+        toast(data.error);
+      }
+    }
+    
+    async function register() {
+      const username = document.getElementById('reg-username').value.trim();
+      const password = document.getElementById('reg-password').value;
+      const familyName = document.getElementById('reg-family').value.trim();
+      
+      if (!username || !password) return toast('请输入用户名和密码');
+      
+      const res = await fetch(API.register, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, familyName })
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        toast('注册成功，请登录');
+        showLogin();
+      } else {
+        toast(data.error);
+      }
+    }
+    
+    function logout() {
+      token = null;
+      localStorage.removeItem('token');
+      showAuth();
+      toast('已退出');
+    }
+    
+    function showPanel(name) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById(`${name}-panel`).classList.add('active');
+      event.target.classList.add('active');
+    }
+    
+    function loadAll() {
+      loadRanking();
+      loadMembers();
+      loadTasks();
+      loadTodayCompletions();
+    }
+    
+    async function loadRanking() {
+      const [weekly, total] = await Promise.all([
+        authFetch(API.stats.weekly).then(r => r?.json()),
+        authFetch(API.stats.total).then(r => r?.json())
+      ]);
+      
+      if (!weekly || !total) return;
+      
+      const championEl = document.getElementById('champion');
+      const weeklyEl = document.getElementById('weekly-ranking');
+      
+      if (weekly.ranking?.length > 0 && weekly.ranking[0].total_points > 0) {
+        const winner = weekly.ranking[0];
+        championEl.innerHTML = `
+          <div class="champion">
+            <div class="champion-title">🏆 本周冠军</div>
+            <div class="champion-name">${winner.name}</div>
+            <div class="champion-points">${winner.total_points} 分</div>
+          </div>
+        `;
+        weeklyEl.innerHTML = weekly.ranking.map((m, i) => `
+          <div class="ranking-item ${i === 0 ? 'first' : ''}">
+            <div class="rank-number">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div>
+            <div class="member-avatar">${m.name[0]}</div>
+            <div class="member-info"><div class="member-name">${m.name}</div></div>
+            <div class="member-points">${m.total_points}分</div>
+          </div>
+        `).join('');
+      } else {
+        championEl.innerHTML = '';
+        weeklyEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div>暂无数据</div>';
+      }
+      
+      const totalEl = document.getElementById('total-ranking');
+      if (total?.length > 0) {
+        totalEl.innerHTML = total.map((m, i) => `
+          <div class="ranking-item ${i === 0 ? 'first' : ''}">
+            <div class="rank-number">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div>
+            <div class="member-avatar">${m.name[0]}</div>
+            <div class="member-info"><div class="member-name">${m.name}</div></div>
+            <div class="member-points">${m.total_points}分</div>
+          </div>
+        `).join('');
+      }
+    }
+    
+    async function loadMembers() {
+      const members = await authFetch(API.members).then(r => r?.json());
+      if (!members) return;
+      
+      const select = document.getElementById('select-member');
+      select.innerHTML = members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+      
+      const list = document.getElementById('members-list');
+      if (members.length > 0) {
+        list.innerHTML = members.map(m => `
+          <div class="card">
+            <div class="member-avatar" style="margin:0 auto 10px;">${m.name[0]}</div>
+            <div class="card-title">${m.name}</div>
+            <button class="delete-btn" onclick="deleteMember(${m.id})">删除</button>
+          </div>
+        `).join('');
+      } else {
+        list.innerHTML = '<div class="empty-state" style="grid-column:span 2;"><div class="empty-state-icon">👤</div>添加家庭成员</div>';
+      }
+    }
+    
+    async function loadTasks() {
+      const tasks = await authFetch(API.tasks).then(r => r?.json());
+      if (!tasks) return;
+      
+      const select = document.getElementById('select-task');
+      select.innerHTML = tasks.map(t => `<option value="${t.id}">${t.name} (+${t.points})</option>`).join('');
+      
+      const list = document.getElementById('tasks-list');
+      if (tasks.length > 0) {
+        list.innerHTML = tasks.map(t => `
+          <div class="card">
+            <div class="card-title">${t.name}</div>
+            <div class="card-points">+${t.points}</div>
+            <div class="card-category">${t.category}</div>
+            <button class="delete-btn" style="margin-top:8px;" onclick="deleteTask(${t.id})">删除</button>
+          </div>
+        `).join('');
+      } else {
+        list.innerHTML = '<div class="empty-state" style="grid-column:span 2;"><div class="empty-state-icon">📋</div>添加积分任务</div>';
+      }
+    }
+    
+    async function loadTodayCompletions() {
+      const date = document.getElementById('completion-date').value;
+      const completions = await authFetch(`${API.completions}?date=${date}`).then(r => r?.json());
+      if (!completions) return;
+      
+      const list = document.getElementById('today-completions');
+      if (completions.length > 0) {
+        list.innerHTML = completions.map(c => `
+          <div class="completion-item">
+            <div class="completion-info">
+              <span><strong>${c.member_name}</strong> · ${c.task_name}</span>
+              ${c.note ? `<span style="color:#888;">${c.note}</span>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="completion-points">+${c.points}</span>
+              <button class="delete-btn" onclick="deleteCompletion(${c.id})">✕</button>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        list.innerHTML = '<div class="empty-state">暂无记录</div>';
+      }
+    }
+    
+    async function addMember() {
+      const name = document.getElementById('new-member-name').value.trim();
+      if (!name) return toast('请输入名称');
+      
+      await authFetch(API.members, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      
+      document.getElementById('new-member-name').value = '';
+      loadAll();
+      toast('添加成功');
+    }
+    
+    async function deleteMember(id) {
+      if (!confirm('确定删除？')) return;
+      await authFetch(`${API.members}/${id}`, { method: 'DELETE' });
+      loadAll();
+    }
+    
+    async function addTask() {
+      const name = document.getElementById('new-task-name').value.trim();
+      const points = parseInt(document.getElementById('new-task-points').value) || 10;
+      const category = document.getElementById('new-task-category').value;
+      
+      if (!name) return toast('请输入任务名称');
+      
+      await authFetch(API.tasks, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, points, category })
+      });
+      
+      document.getElementById('new-task-name').value = '';
+      loadAll();
+      toast('添加成功');
+    }
+    
+    async function deleteTask(id) {
+      if (!confirm('确定删除？')) return;
+      await authFetch(`${API.tasks}/${id}`, { method: 'DELETE' });
+      loadAll();
+    }
+    
+    async function addCompletion() {
+      const memberId = document.getElementById('select-member').value;
+      const taskId = document.getElementById('select-task').value;
+      const date = document.getElementById('completion-date').value;
+      const note = document.getElementById('completion-note').value.trim();
+      
+      if (!memberId || !taskId) return toast('请选择成员和任务');
+      
+      await authFetch(API.completions, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId, taskId, date, note })
+      });
+      
+      document.getElementById('completion-note').value = '';
+      loadAll();
+      toast('记录成功');
+    }
+    
+    async function deleteCompletion(id) {
+      await authFetch(`${API.completions}/${id}`, { method: 'DELETE' });
+      loadAll();
+    }
+    
+    async function loadHistory() {
+      const start = document.getElementById('history-start').value;
+      const end = document.getElementById('history-end').value;
+      
+      const completions = await authFetch(`${API.completions}?startDate=${start}&endDate=${end}`).then(r => r?.json());
+      if (!completions) return;
+      
+      const list = document.getElementById('history-list');
+      if (completions.length > 0) {
+        list.innerHTML = completions.map(c => `
+          <div class="completion-item">
+            <div class="completion-info">
+              <span>${c.completed_at} · <strong>${c.member_name}</strong> · ${c.task_name}</span>
+            </div>
+            <span class="completion-points">+${c.points}</span>
+          </div>
+        `).join('');
+      } else {
+        list.innerHTML = '<div class="empty-state">暂无记录</div>';
+      }
+    }
+    
+    document.getElementById('completion-date').addEventListener('change', loadTodayCompletions);
+  </script>
+</body>
+</html>
