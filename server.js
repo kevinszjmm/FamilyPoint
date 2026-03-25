@@ -3,7 +3,7 @@ const path = require('path');
 const { initDatabase, userOps, memberOps, taskOps, completionOps, statsOps, rewardOps, redemptionOps } = require('./database');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -245,12 +245,22 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// 健康检查（Render 需要）
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
 // 启动
 async function start() {
   await initDatabase();
+  const isRender = !!process.env.DATABASE_URL;
   app.listen(PORT, () => {
-    console.log(`\n🏠 家庭积分系统已启动！`);
-    console.log(`📱 访问地址: http://localhost:${PORT}\n`);
+    if (isRender) {
+      console.log(`🏠 家庭积分系统已部署到 Render`);
+    } else {
+      console.log(`\n🏠 家庭积分系统已启动！`);
+      console.log(`📱 访问地址: http://localhost:${PORT}\n`);
+    }
   });
 }
 
