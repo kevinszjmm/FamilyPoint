@@ -462,8 +462,11 @@
     async function loadMembers() {
       currentMembers = await authFetch(API.members).then(r => r?.json()) || [];
       const select = document.getElementById('select-member');
-      if (currentMembers.length > 0 && select.options.length === 0) {
+      // 始终更新下拉选项
+      if (currentMembers.length > 0) {
         select.innerHTML = currentMembers.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+      } else {
+        select.innerHTML = '<option value="">请先添加成员</option>';
       }
       
       const list = document.getElementById('members-list');
@@ -490,8 +493,11 @@
     async function loadTasks() {
       const tasks = await authFetch(API.tasks).then(r => r?.json()) || [];
       const select = document.getElementById('select-task');
-      if (tasks.length > 0 && select.options.length === 0) {
+      // 始终更新下拉选项
+      if (tasks.length > 0) {
         select.innerHTML = tasks.map(t => `<option value="${t.id}">${t.name} (+${t.points})</option>`).join('');
+      } else {
+        select.innerHTML = '<option value="">请先添加任务</option>';
       }
       
       const list = document.getElementById('tasks-list');
